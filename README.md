@@ -53,3 +53,12 @@ See `docs/COMMANDS.md`, `docs/DATA_MODEL.md`, `docs/GEOMETRY.md`, and `docs/ROAD
 - **Obstacle (O):** click-drag to place a snapped rectangular obstacle.
 - **Door (D):** with wall selected or by clicking wall, place a door opening (default width `0.9m`).
 - **Window (N):** with wall selected or by clicking wall, place a window opening (default width `1.2m`).
+
+
+## Phase 2.5A Notes
+- Walls are now topology-based (`wallVertices` + `wallEdges`) with legacy XML migration support.
+- Opening holes are rendered as edge gaps (before/after wall segments) with oriented symbols.
+- Use **Select** to drag vertices, edges, rooms, obstacles, and openings (openings slide along walls).
+- Locked entities show a padlock and cannot be moved until unlocked in the right inspector.
+- Viewport is constrained to world bounds `[-100,100]` and zoom width `[2m, 200m]`; origin axes/marker are shown at `(0,0)`.
+- **Measure (M)** is non-mutating: click start, move, click end; `Esc` cancels.

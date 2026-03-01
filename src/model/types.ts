@@ -12,6 +12,22 @@ export interface Wall {
   polygon: Vec2[];
   roomsLeft: ID[];
   roomsRight: ID[];
+  locked?: boolean;
+}
+
+export interface WallVertex {
+  id: ID;
+  x: number;
+  y: number;
+  locked?: boolean;
+}
+
+export interface WallEdge {
+  id: ID;
+  v1Id: ID;
+  v2Id: ID;
+  thicknessM: number;
+  locked?: boolean;
 }
 
 export interface Room {
@@ -26,6 +42,7 @@ export interface Room {
   areaM2: number;
   perimeterM: number;
   label?: Vec2;
+  locked?: boolean;
 }
 
 export interface Obstacle {
@@ -35,6 +52,7 @@ export interface Obstacle {
   widthM?: number;
   heightM?: number;
   polygon: Vec2[];
+  locked?: boolean;
 }
 
 export interface Opening {
@@ -44,9 +62,10 @@ export interface Opening {
   widthM: number;
   type: 'door' | 'window';
   orientation: 'left' | 'right' | 'in' | 'out';
+  locked?: boolean;
 }
 
-export type ToolName = 'select' | 'wall' | 'roomRect' | 'obstacle' | 'door' | 'window';
+export type ToolName = 'select' | 'wall' | 'roomRect' | 'obstacle' | 'door' | 'window' | 'measure';
 
 export interface ProjectMeta {
   name: string;
@@ -60,6 +79,8 @@ export interface Project {
   units: 'm';
   meta: ProjectMeta;
   walls: Wall[];
+  wallVertices: WallVertex[];
+  wallEdges: WallEdge[];
   rooms: Room[];
   obstacles: Obstacle[];
   openings: Opening[];

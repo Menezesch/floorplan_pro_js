@@ -14,12 +14,12 @@ const projectPointOnWall = (point: { x: number; y: number }, wall: Wall) => {
 
 export const createSelectToolHandlers = (): ToolEventHandlers => {
   let dragStart: { x: number; y: number } | null = null;
-  let dragEntity: { kind: 'wall' | 'room' | 'obstacle' | 'opening'; id: string } | null = null;
+  let dragEntity: { kind: 'vertex' | 'edge' | 'room' | 'obstacle' | 'opening'; id: string } | null = null;
 
   return {
     onPointerDown: (ctx, actions) => {
       if (ctx.hit.id && ctx.hit.kind !== 'none') {
-        actions.setSelected(ctx.hit.id);
+        actions.setSelected(ctx.hit.id, ctx.hit.kind);
         dragStart = ctx.snapped.point;
         dragEntity = { kind: ctx.hit.kind, id: ctx.hit.id };
       } else {
@@ -34,15 +34,13 @@ export const createSelectToolHandlers = (): ToolEventHandlers => {
         const opening = ctx.project.openings.find((o) => o.id === dragEntity?.id);
         const wall = opening ? ctx.project.walls.find((w) => w.id === opening.wallId) : undefined;
         if (!wall) return;
-        const distanceAlongM = projectPointOnWall(ctx.snapped.point, wall);
-        actions.moveOpeningAlongWall(dragEntity.id, distanceAlongM);
+        actions.moveOpeningAlongWall(dragEntity.id, projectPointOnWall(ctx.snapped.point, wall));
         return;
       }
-
       const delta = { x: ctx.snapped.point.x - dragStart.x, y: ctx.snapped.point.y - dragStart.y };
       if (Math.abs(delta.x) < 1e-9 && Math.abs(delta.y) < 1e-9) return;
-
-      if (dragEntity.kind === 'wall') actions.moveWall(dragEntity.id, delta);
+      if (dragEntity.kind === 'vertex') actions.moveVertex(dragEntity.id, delta);
+      if (dragEntity.kind === 'edge') actions.moveEdge(dragEntity.id, delta);
       if (dragEntity.kind === 'room') actions.moveRoom(dragEntity.id, delta);
       if (dragEntity.kind === 'obstacle') actions.moveObstacle(dragEntity.id, delta);
       dragStart = ctx.snapped.point;

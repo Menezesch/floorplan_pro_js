@@ -61,6 +61,7 @@ const App = () => {
       if (e.key.toLowerCase() === 'o') setTool('obstacle');
       if (e.key.toLowerCase() === 'd') setTool('door');
       if (e.key.toLowerCase() === 'n') setTool('window');
+      if (e.key.toLowerCase() === 'm') setTool('measure');
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);

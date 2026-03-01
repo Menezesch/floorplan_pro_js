@@ -7,6 +7,8 @@ const sample: Project = {
   units: 'm',
   meta: { name: 'A & B', created: '2024', modified: '2024', gridM: 0.1 },
   walls: [{ id: 'w1', points: [{ x: 0, y: 0 }, { x: 1, y: 0 }], thicknessM: 0.15, polygon: [], roomsLeft: [], roomsRight: [] }],
+  wallVertices: [{ id: 'v1', x: 0, y: 0 }, { id: 'v2', x: 1, y: 0 }],
+  wallEdges: [{ id: 'w1', v1Id: 'v1', v2Id: 'v2', thicknessM: 0.15 }],
   rooms: [
     {
       id: 'r1',

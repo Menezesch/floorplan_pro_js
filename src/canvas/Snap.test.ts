@@ -6,16 +6,12 @@ const baseProject: Project = {
   version: '1.0',
   units: 'm',
   meta: { name: 'p', created: 'x', modified: 'x', gridM: 0.1 },
-  walls: [
-    {
-      id: 'w1',
-      points: [{ x: 0, y: 0 }, { x: 2, y: 0 }],
-      thicknessM: 0.15,
-      polygon: [],
-      roomsLeft: [],
-      roomsRight: []
-    }
+  walls: [],
+  wallVertices: [
+    { id: 'v1', x: 0, y: 0 },
+    { id: 'v2', x: 2, y: 0 }
   ],
+  wallEdges: [{ id: 'e1', v1Id: 'v1', v2Id: 'v2', thicknessM: 0.15 }],
   rooms: [],
   obstacles: [],
   openings: []
@@ -31,7 +27,7 @@ describe('applySnapping', () => {
   });
 
   it('falls back to grid with minimum 0.05m step', () => {
-    const hit = applySnapping({ x: 0.13, y: 0.17 }, { ...baseProject, walls: [] }, allSnap, 0.01, 50, 10);
+    const hit = applySnapping({ x: 0.13, y: 0.17 }, { ...baseProject, wallEdges: [], wallVertices: [] }, allSnap, 0.01, 50, 10);
     expect(hit.kind).toBe('grid');
     expect(hit.point.x).toBeCloseTo(0.15, 8);
     expect(hit.point.y).toBeCloseTo(0.15, 8);

@@ -8,13 +8,13 @@ export interface SnapResult {
 }
 
 const collectSegments = (project: Project): [Vec2, Vec2][] => {
-  const result: [Vec2, Vec2][] = [];
-  for (const wall of project.walls) {
-    for (let i = 0; i < wall.points.length - 1; i += 1) {
-      result.push([wall.points[i], wall.points[i + 1]]);
-    }
-  }
-  return result;
+  const byId = new Map(project.wallVertices.map((v) => [v.id, v]));
+  return project.wallEdges.flatMap((edge) => {
+    const a = byId.get(edge.v1Id);
+    const b = byId.get(edge.v2Id);
+    if (!a || !b) return [];
+    return [[{ x: a.x, y: a.y }, { x: b.x, y: b.y }] as [Vec2, Vec2]];
+  });
 };
 
 const gridSnap = (point: Vec2, gridM: number): Vec2 => ({
@@ -22,16 +22,9 @@ const gridSnap = (point: Vec2, gridM: number): Vec2 => ({
   y: Math.round(point.y / gridM) * gridM
 });
 
-export const applySnapping = (
-  point: Vec2,
-  project: Project,
-  snap: SnapState,
-  gridM: number,
-  pixelsPerMeter: number,
-  tolerancePx = 10
-): SnapResult => {
+export const applySnapping = (point: Vec2, project: Project, snap: SnapState, gridM: number, pixelsPerMeter: number, tolerancePx = 10): SnapResult => {
   const toleranceM = tolerancePx / Math.max(1e-6, pixelsPerMeter);
-  const vertices = project.walls.flatMap((w) => w.points);
+  const vertices = project.wallVertices.map((v) => ({ x: v.x, y: v.y }));
   const segs = collectSegments(project);
 
   if (snap.vertex) {

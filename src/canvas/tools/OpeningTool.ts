@@ -15,11 +15,11 @@ const projectPointOnWall = (point: { x: number; y: number }, wall: Wall) => {
 
 export const createOpeningToolHandlers = (type: Opening['type']): ToolEventHandlers => ({
   onPointerDown: (ctx, actions) => {
-    const wallId = ctx.hit.kind === 'wall' ? ctx.hit.id : ctx.selectedId;
+    const wallId = ctx.hit.kind === 'edge' ? ctx.hit.id : ctx.selectedKind === 'edge' ? ctx.selectedId : undefined;
     const wall = wallId ? ctx.project.walls.find((w) => w.id === wallId) : undefined;
     if (!wall) return;
     const projected = projectPointOnWall(ctx.snapped.point, wall);
     const openingId = actions.addOpeningToWall(wall.id, type, projected.distanceAlongM, type === 'door' ? 0.9 : 1.2);
-    if (openingId) actions.setSelected(openingId);
+    if (openingId) actions.setSelected(openingId, 'opening');
   }
 });
