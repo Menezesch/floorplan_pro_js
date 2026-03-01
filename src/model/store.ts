@@ -58,7 +58,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   selectedId: undefined,
   draft: [],
   snap: { grid: true, vertex: true, edge: true, midpoint: true },
-  view: { x: 0, y: 0, w: 3000, h: 2000, zoom: 1 },
+  view: { x: 0, y: 0, w: 30, h: 20, zoom: 1 / 30 },
   hasUnsavedChanges: false,
   setTool: (activeTool) => set({ activeTool, draft: [] }),
   setSelected: (selectedId) => set({ selectedId }),
