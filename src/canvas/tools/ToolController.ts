@@ -1,6 +1,7 @@
 import type { ToolName } from '../../model/types';
 import type { ToolEventHandlers } from './shared';
 import { createSelectToolHandlers } from './SelectTool';
+import { createMoveToolHandlers } from './MoveTool';
 import { createWallToolHandlers } from './WallTool';
 import { createRoomRectToolHandlers } from './RoomRectTool';
 import { createObstacleToolHandlers } from './ObstacleTool';
@@ -9,6 +10,7 @@ import { createMeasureToolHandlers } from './MeasureTool';
 
 export const createToolHandlers = (tool: ToolName): ToolEventHandlers => {
   if (tool === 'select') return createSelectToolHandlers();
+  if (tool === 'move') return createMoveToolHandlers();
   if (tool === 'wall') return createWallToolHandlers();
   if (tool === 'roomRect') return createRoomRectToolHandlers();
   if (tool === 'obstacle') return createObstacleToolHandlers();

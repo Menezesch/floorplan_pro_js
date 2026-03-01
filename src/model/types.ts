@@ -65,7 +65,7 @@ export interface Opening {
   locked?: boolean;
 }
 
-export type ToolName = 'select' | 'wall' | 'roomRect' | 'obstacle' | 'door' | 'window' | 'measure';
+export type ToolName = 'select' | 'move' | 'wall' | 'roomRect' | 'obstacle' | 'door' | 'window' | 'measure';
 
 export interface ProjectMeta {
   name: string;

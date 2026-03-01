@@ -16,7 +16,18 @@ export const createRoomRectToolHandlers = (): ToolEventHandlers => ({
   onPointerUp: (_ctx, actions) => {
     const draft = actions.getRectDraft();
     if (!draft || draft.kind !== 'roomRect') return;
-    actions.addRoomRect(draft.start, draft.end);
+    const minX = Math.min(draft.start.x, draft.end.x);
+    const maxX = Math.max(draft.start.x, draft.end.x);
+    const minY = Math.min(draft.start.y, draft.end.y);
+    const maxY = Math.max(draft.start.y, draft.end.y);
+    const p1 = { x: minX, y: minY };
+    const p2 = { x: maxX, y: minY };
+    const p3 = { x: maxX, y: maxY };
+    const p4 = { x: minX, y: maxY };
+    actions.addWallSegment(p1, p2, 0.15);
+    actions.addWallSegment(p2, p3, 0.15);
+    actions.addWallSegment(p3, p4, 0.15);
+    actions.addWallSegment(p4, p1, 0.15);
     actions.setRectDraft(null, null, null);
     actions.setPreviewLabel(null);
   },

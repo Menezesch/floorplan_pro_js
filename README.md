@@ -25,6 +25,7 @@ npm run dev
 | Shortcut | Action |
 |---|---|
 | V | Select tool |
+| G | Move tool |
 | W | Wall tool |
 | R | Rect Room tool |
 | O | Obstacle tool |
@@ -47,7 +48,8 @@ See `docs/COMMANDS.md`, `docs/DATA_MODEL.md`, `docs/GEOMETRY.md`, and `docs/ROAD
 
 
 ## Tool Usage (Phase 2)
-- **Select (V):** click to select walls/rooms/obstacles/openings; drag selected entity to move it.
+- **Select (V):** click-only selection (no accidental drag).
+- **Move (G):** click-drag selected/hovered entities (edges, vertices, openings, obstacles).
 - **Wall (W):** click start point, move cursor, click end point; `Esc` cancels active wall preview.
 - **Rect Room (R):** click-drag to place a snapped room rectangle (defaults: `name=Room`, `classification=internal`).
 - **Obstacle (O):** click-drag to place a snapped rectangular obstacle.

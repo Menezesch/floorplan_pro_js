@@ -18,6 +18,10 @@ const KonvaViewport = () => {
   const [wallDraft, setWallDraft] = useState<{ start: { x: number; y: number }; end?: { x: number; y: number } } | null>(null);
   const [rectDraft, setRectDraftState] = useState<{ start: { x: number; y: number }; end: { x: number; y: number }; kind: 'roomRect' | 'obstacle' } | null>(null);
   const [previewLabel, setPreviewLabelState] = useState<{ text: string; point: { x: number; y: number } } | null>(null);
+  const [hoveredVertexId, setHoveredVertexId] = useState<string | undefined>();
+  const [isMiddlePanning, setIsMiddlePanning] = useState(false);
+  const [panLast, setPanLast] = useState<{ x: number; y: number } | null>(null);
+
   const {
     project,
     view,
@@ -98,6 +102,8 @@ const KonvaViewport = () => {
     const rawWorld = screenToWorld(screenPoint, view, viewportPx);
     const snapped = applySnapping(rawWorld, project, snap, project.meta.gridM, pixelsPerMeter, 10);
     setCursor(rawWorld);
+    const nearVertex = project.wallVertices.find((v) => Math.hypot(v.x - rawWorld.x, v.y - rawWorld.y) <= 8 / pixelsPerMeter);
+    setHoveredVertexId(nearVertex?.id);
     setSnapResult(snapped);
     return { tool: activeTool, rawWorld, snapped, pixelsPerMeter, project, snapState: snap, hit: parseHit(e.target), selectedId, selectedKind, shiftKey: e.evt.shiftKey };
   };
@@ -142,13 +148,6 @@ const KonvaViewport = () => {
         y={transform.y}
         scaleX={transform.scale}
         scaleY={transform.scale}
-        draggable={activeTool === 'select'}
-        onDragMove={(e) => {
-          const node = e.target;
-          const deltaPx = { x: node.x() - transform.x, y: node.y() - transform.y };
-          setView(withPanDelta(view, deltaPx, viewportPx));
-          node.position({ x: transform.x, y: transform.y });
-        }}
         onWheel={(e) => {
           e.evt.preventDefault();
           const rect = containerRef.current?.getBoundingClientRect();
@@ -158,20 +157,50 @@ const KonvaViewport = () => {
           setView(withZoomAtScreenPoint(view, viewportPx, screenPoint, factor));
         }}
         onMouseMove={(e) => {
-          const ctx = getContext({ evt: e.evt as MouseEvent, target: e.target });
+          const evt = e.evt as MouseEvent;
+          if (isMiddlePanning && (evt.buttons & 4) && panLast) {
+            const deltaPx = { x: evt.clientX - panLast.x, y: evt.clientY - panLast.y };
+            setView(withPanDelta(view, deltaPx, viewportPx));
+            setPanLast({ x: evt.clientX, y: evt.clientY });
+            return;
+          }
+          const ctx = getContext({ evt, target: e.target });
           if (ctx) handlers.onPointerMove?.(ctx, actions);
         }}
         onMouseDown={(e) => {
-          const ctx = getContext({ evt: e.evt as MouseEvent, target: e.target });
+          const evt = e.evt as MouseEvent;
+          if (evt.button === 1 || evt.buttons === 4) {
+            setIsMiddlePanning(true);
+            setPanLast({ x: evt.clientX, y: evt.clientY });
+            return;
+          }
+          const ctx = getContext({ evt, target: e.target });
           if (ctx) handlers.onPointerDown?.(ctx, actions);
         }}
         onMouseUp={(e) => {
-          const ctx = getContext({ evt: e.evt as MouseEvent, target: e.target });
+          const evt = e.evt as MouseEvent;
+          if (isMiddlePanning) {
+            setIsMiddlePanning(false);
+            setPanLast(null);
+            return;
+          }
+          const ctx = getContext({ evt, target: e.target });
           if (ctx) handlers.onPointerUp?.(ctx, actions);
         }}
       >
         <KonvaGridLayer view={view} viewportPx={viewportPx} baseStepM={0.05} />
-        <KonvaSceneLayer project={project} selectedId={selectedId} selectedKind={selectedKind} wallDraft={wallDraft ?? undefined} rectDraft={rectDraft} measureDraft={measure} onSelect={setSelected} />
+        <KonvaSceneLayer
+          project={project}
+          selectedId={selectedId}
+          selectedKind={selectedKind}
+          activeTool={activeTool}
+          hoveredVertexId={hoveredVertexId}
+          vertexHandleRadius={4 / pixelsPerMeter}
+          wallDraft={wallDraft ?? undefined}
+          rectDraft={rectDraft}
+          measureDraft={measure}
+          onSelect={setSelected}
+        />
       </Stage>
       <KonvaRulersOverlay view={view} viewportPx={viewportPx} />
       {snapScreen && <SnapOverlay snap={snapResult} leftPx={snapScreen.x} topPx={snapScreen.y} />}
