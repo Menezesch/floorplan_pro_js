@@ -3,7 +3,7 @@
 Web-based electrical planning editor for quick top-view floor plans in real-world meters.
 
 ## MVP Features
-- SVG CAD-lite editor with left tools panel, center canvas, right properties panel.
+- Konva CAD-lite editor with left tools panel, center canvas, right properties panel.
 - Wall centerline drawing with generated wall polygons.
 - Rectangular room tool + room model foundation.
 - Obstacle/no-go polygon drawing.
@@ -25,10 +25,12 @@ npm run dev
 | Shortcut | Action |
 |---|---|
 | V | Select tool |
+| G | Move tool |
 | W | Wall tool |
 | R | Rect Room tool |
 | O | Obstacle tool |
-| M | Measure tool |
+| D | Door tool |
+| N | Window tool |
 | Delete | Delete selection |
 | Ctrl+Z / Ctrl+Y | Undo / Redo |
 | Ctrl+S | Save XML |
@@ -43,3 +45,22 @@ npm run dev
 
 ## Development
 See `docs/COMMANDS.md`, `docs/DATA_MODEL.md`, `docs/GEOMETRY.md`, and `docs/ROADMAP.md`.
+
+
+## Tool Usage (Phase 2)
+- **Select (V):** click-only selection (no accidental drag).
+- **Move (G):** click-drag selected/hovered entities (edges, vertices, openings, obstacles).
+- **Wall (W):** click start point, move cursor, click end point; `Esc` cancels active wall preview.
+- **Rect Room (R):** click-drag to place a snapped room rectangle (defaults: `name=Room`, `classification=internal`).
+- **Obstacle (O):** click-drag to place a snapped rectangular obstacle.
+- **Door (D):** with wall selected or by clicking wall, place a door opening (default width `0.9m`).
+- **Window (N):** with wall selected or by clicking wall, place a window opening (default width `1.2m`).
+
+
+## Phase 2.5A Notes
+- Walls are now topology-based (`wallVertices` + `wallEdges`) with legacy XML migration support.
+- Opening holes are rendered as edge gaps (before/after wall segments) with oriented symbols.
+- Use **Select** to drag vertices, edges, rooms, obstacles, and openings (openings slide along walls).
+- Locked entities show a padlock and cannot be moved until unlocked in the right inspector.
+- Viewport is constrained to world bounds `[-100,100]` and zoom width `[2m, 200m]`; origin axes/marker are shown at `(0,0)`.
+- **Measure (M)** is non-mutating: click start, move, click end; `Esc` cancels.

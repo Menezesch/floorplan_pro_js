@@ -1,6 +1,6 @@
 import ToolbarLeft from './ToolbarLeft';
 import PropertiesRight from './PropertiesRight';
-import SvgViewport from '../canvas/SvgViewport';
+import KonvaViewport from '../canvas/konva/KonvaViewport';
 import StatusBar from './StatusBar';
 
 const Layout = () => (
@@ -8,7 +8,7 @@ const Layout = () => (
     <ToolbarLeft />
     <div className="flex min-h-0 flex-col">
       <div className="min-h-0 flex-1">
-        <SvgViewport />
+        <KonvaViewport />
       </div>
       <StatusBar />
     </div>
