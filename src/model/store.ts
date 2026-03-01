@@ -1,19 +1,27 @@
 import { create } from 'zustand';
 import { nanoid } from 'nanoid';
-import type { ID, Obstacle, Project, Room, SnapState, ToolName, Vec2, Wall } from './types';
+import type { ID, Obstacle, Opening, Project, ProjectSettings, RectangleRoom, SnapState, ToolName, Vec2, WallSegment } from './types';
 import { createHistory, pushHistory, redoHistory, undoHistory } from './history';
-import { wallSegmentToPolygon } from '../geometry/polylineOffset';
-import { polygonArea, polygonPerimeter } from '../geometry/polygonOps';
+import { wallLengthM } from '../geometry/measure';
+import { detectAxisAlignedRectangle } from './rectangleDetection';
+
+const defaultSettings = (): ProjectSettings => ({
+  defaultWallThicknessM: 0.15,
+  defaultCeilingHeightM: 2.5,
+  gridSizeM: 0.05,
+  snapThresholdPx: 10,
+  planOrigin: { x: 0, y: 0 }
+});
 
 const newProject = (): Project => ({
-  version: '1.0',
+  version: '1.1',
   units: 'm',
   meta: {
     name: 'Untitled project',
     created: new Date().toISOString(),
-    modified: new Date().toISOString(),
-    gridM: 0.1
+    modified: new Date().toISOString()
   },
+  settings: defaultSettings(),
   walls: [],
   rooms: [],
   obstacles: [],
@@ -33,98 +41,165 @@ interface AppStore {
   history: ReturnType<typeof createHistory>;
   activeTool: ToolName;
   selectedId?: ID;
-  draft: Vec2[];
   snap: SnapState;
   view: ViewState;
   hasUnsavedChanges: boolean;
+  pointerWorld?: Vec2;
+  snapIndicator?: Vec2;
   setTool: (t: ToolName) => void;
   setSelected: (id?: ID) => void;
-  addWallSegment: (a: Vec2, b: Vec2, thicknessM?: number) => void;
+  setPointerWorld: (point?: Vec2) => void;
+  setSnapIndicator: (point?: Vec2) => void;
+  setSnapActive: (active?: SnapState['active']) => void;
+  addWallSegment: (a: Vec2, b: Vec2) => void;
   addRoomRect: (a: Vec2, b: Vec2) => void;
-  addObstacle: (polygon: Vec2[]) => void;
-  updateEntityName: (id: ID, name: string) => void;
+  addObstacleRect: (a: Vec2, b: Vec2) => void;
+  addOpeningOnWall: (wallId: ID, click: Vec2, type: 'window' | 'door') => void;
+  updateWall: (id: ID, patch: Partial<Pick<WallSegment, 'thicknessM'>>) => void;
+  updateRoom: (id: ID, patch: Partial<Pick<RectangleRoom, 'name' | 'widthM' | 'heightM' | 'classification'>>) => void;
+  updateSettings: (patch: Partial<ProjectSettings>) => void;
   deleteSelection: () => void;
   undo: () => void;
   redo: () => void;
   replaceProject: (project: Project) => void;
-  setView: (next: Partial<ViewState>) => void;
+  setView: (updater: (prev: ViewState) => ViewState) => void;
   markSaved: () => void;
 }
+
+const withModifiedMeta = (project: Project): Project => ({
+  ...project,
+  meta: { ...project.meta, modified: new Date().toISOString() }
+});
+
+const maybeConvertRecentWallsToRoom = (project: Project): Project => {
+  if (project.walls.length < 4) return project;
+  const recent = project.walls.slice(-4);
+  const room = detectAxisAlignedRectangle(recent);
+  if (!room) return project;
+  return {
+    ...project,
+    walls: project.walls.slice(0, -4),
+    rooms: [...project.rooms, { ...room, name: `Room ${project.rooms.length + 1}` }]
+  };
+};
+
+const pointProjectionOffset = (wall: WallSegment, click: Vec2): number => {
+  const abx = wall.p2.x - wall.p1.x;
+  const aby = wall.p2.y - wall.p1.y;
+  const len2 = abx * abx + aby * aby || 1;
+  const t = Math.max(0, Math.min(1, ((click.x - wall.p1.x) * abx + (click.y - wall.p1.y) * aby) / len2));
+  return wallLengthM(wall) * t;
+};
 
 export const useAppStore = create<AppStore>((set, get) => ({
   project: newProject(),
   history: createHistory(),
   activeTool: 'select',
   selectedId: undefined,
-  draft: [],
-  snap: { grid: true, vertex: true, edge: true, midpoint: true },
-  view: { x: 0, y: 0, w: 3000, h: 2000, zoom: 1 },
+  snap: { grid: true, vertex: true, active: undefined },
+  view: { x: -200, y: -200, w: 4000, h: 2600, zoom: 1 },
   hasUnsavedChanges: false,
-  setTool: (activeTool) => set({ activeTool, draft: [] }),
+  pointerWorld: undefined,
+  snapIndicator: undefined,
+  setTool: (activeTool) => set({ activeTool }),
   setSelected: (selectedId) => set({ selectedId }),
-  addWallSegment: (a, b, thicknessM = 0.12) => {
-    const curr = get().project;
-    const wall: Wall = {
+  setPointerWorld: (pointerWorld) => set({ pointerWorld }),
+  setSnapIndicator: (snapIndicator) => set({ snapIndicator }),
+  setSnapActive: (active) => set((state) => ({ snap: { ...state.snap, active } })),
+  addWallSegment: (a, b) => {
+    const current = get().project;
+    const wall: WallSegment = {
       id: nanoid(),
-      points: [a, b],
-      thicknessM,
-      polygon: wallSegmentToPolygon(a, b, thicknessM),
-      roomsLeft: [],
-      roomsRight: []
+      p1: a,
+      p2: b,
+      thicknessM: current.settings.defaultWallThicknessM
     };
-    const project = { ...curr, walls: [...curr.walls, wall], meta: { ...curr.meta, modified: new Date().toISOString() } };
-    set({ project, history: pushHistory(get().history, curr), hasUnsavedChanges: true });
+    const project = maybeConvertRecentWallsToRoom(withModifiedMeta({ ...current, walls: [...current.walls, wall] }));
+    set({ project, history: pushHistory(get().history, current), hasUnsavedChanges: true });
   },
   addRoomRect: (a, b) => {
-    const curr = get().project;
+    const current = get().project;
     const minX = Math.min(a.x, b.x);
     const maxX = Math.max(a.x, b.x);
     const minY = Math.min(a.y, b.y);
     const maxY = Math.max(a.y, b.y);
-    const boundary = [
-      { x: minX, y: minY },
-      { x: maxX, y: minY },
-      { x: maxX, y: maxY },
-      { x: minX, y: maxY }
-    ];
-    const room: Room = {
+    const room: RectangleRoom = {
       id: nanoid(),
-      name: `Room ${curr.rooms.length + 1}`,
-      boundary,
-      wallIds: [],
-      areaM2: polygonArea(boundary),
-      perimeterM: polygonPerimeter(boundary),
-      label: { x: (minX + maxX) / 2, y: (minY + maxY) / 2 }
+      name: `Room ${current.rooms.length + 1}`,
+      origin: { x: minX, y: minY },
+      widthM: maxX - minX,
+      heightM: maxY - minY,
+      classification: 'internal'
     };
-    const project = { ...curr, rooms: [...curr.rooms, room], meta: { ...curr.meta, modified: new Date().toISOString() } };
-    set({ project, history: pushHistory(get().history, curr), hasUnsavedChanges: true });
+    const project = withModifiedMeta({ ...current, rooms: [...current.rooms, room] });
+    set({ project, history: pushHistory(get().history, current), hasUnsavedChanges: true });
   },
-  addObstacle: (polygon) => {
-    const curr = get().project;
-    const obstacle: Obstacle = { id: nanoid(), type: 'no_go', polygon };
-    const project = {
-      ...curr,
-      obstacles: [...curr.obstacles, obstacle],
-      meta: { ...curr.meta, modified: new Date().toISOString() }
+  addObstacleRect: (a, b) => {
+    const current = get().project;
+    const minX = Math.min(a.x, b.x);
+    const maxX = Math.max(a.x, b.x);
+    const minY = Math.min(a.y, b.y);
+    const maxY = Math.max(a.y, b.y);
+    const obstacle: Obstacle = {
+      id: nanoid(),
+      type: 'no_go',
+      polygon: [
+        { x: minX, y: minY },
+        { x: maxX, y: minY },
+        { x: maxX, y: maxY },
+        { x: minX, y: maxY }
+      ]
     };
-    set({ project, history: pushHistory(get().history, curr), hasUnsavedChanges: true });
+    const project = withModifiedMeta({ ...current, obstacles: [...current.obstacles, obstacle] });
+    set({ project, history: pushHistory(get().history, current), hasUnsavedChanges: true });
   },
-  updateEntityName: (id, name) => {
-    const curr = get().project;
-    const project = { ...curr, rooms: curr.rooms.map((r) => (r.id === id ? { ...r, name } : r)) };
-    set({ project, history: pushHistory(get().history, curr), hasUnsavedChanges: true });
+  addOpeningOnWall: (wallId, click, type) => {
+    const current = get().project;
+    const wall = current.walls.find((item) => item.id === wallId);
+    if (!wall) return;
+    const opening: Opening = {
+      id: nanoid(),
+      wallId,
+      offsetAlongWallM: pointProjectionOffset(wall, click),
+      widthM: type === 'door' ? 0.9 : 1.2,
+      type
+    };
+    const project = withModifiedMeta({ ...current, openings: [...current.openings, opening] });
+    set({ project, history: pushHistory(get().history, current), hasUnsavedChanges: true });
+  },
+  updateWall: (id, patch) => {
+    const current = get().project;
+    const project = withModifiedMeta({
+      ...current,
+      walls: current.walls.map((wall) => (wall.id === id ? { ...wall, ...patch } : wall))
+    });
+    set({ project, history: pushHistory(get().history, current), hasUnsavedChanges: true });
+  },
+  updateRoom: (id, patch) => {
+    const current = get().project;
+    const project = withModifiedMeta({
+      ...current,
+      rooms: current.rooms.map((room) => (room.id === id ? { ...room, ...patch } : room))
+    });
+    set({ project, history: pushHistory(get().history, current), hasUnsavedChanges: true });
+  },
+  updateSettings: (patch) => {
+    const current = get().project;
+    const project = withModifiedMeta({ ...current, settings: { ...current.settings, ...patch } });
+    set({ project, hasUnsavedChanges: true });
   },
   deleteSelection: () => {
-    const { selectedId } = get();
+    const selectedId = get().selectedId;
     if (!selectedId) return;
-    const curr = get().project;
-    const project: Project = {
-      ...curr,
-      walls: curr.walls.filter((w) => w.id !== selectedId),
-      rooms: curr.rooms.filter((r) => r.id !== selectedId),
-      obstacles: curr.obstacles.filter((o) => o.id !== selectedId)
-    };
-    set({ project, selectedId: undefined, history: pushHistory(get().history, curr), hasUnsavedChanges: true });
+    const current = get().project;
+    const project = withModifiedMeta({
+      ...current,
+      walls: current.walls.filter((item) => item.id !== selectedId),
+      rooms: current.rooms.filter((item) => item.id !== selectedId),
+      obstacles: current.obstacles.filter((item) => item.id !== selectedId),
+      openings: current.openings.filter((item) => item.id !== selectedId)
+    });
+    set({ project, selectedId: undefined, history: pushHistory(get().history, current), hasUnsavedChanges: true });
   },
   undo: () => {
     const { history, project } = get();
@@ -137,6 +212,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (next.project) set({ history: next.history, project: next.project, hasUnsavedChanges: true });
   },
   replaceProject: (project) => set({ project, history: createHistory(), hasUnsavedChanges: false }),
-  setView: (next) => set((state) => ({ view: { ...state.view, ...next } })),
+  setView: (updater) => set((state) => ({ view: updater(state.view) })),
   markSaved: () => set({ hasUnsavedChanges: false })
 }));

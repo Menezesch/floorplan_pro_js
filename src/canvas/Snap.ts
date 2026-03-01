@@ -1,31 +1,57 @@
 import type { Project, SnapState, Vec2 } from '../model/types';
-import { nearestMidpoint, nearestPointOnSegments, nearestVertex } from '../geometry/snapGeom';
+import { nearestVertex, snapToGrid } from '../geometry/snapGeom';
 
-const collectSegments = (project: Project): [Vec2, Vec2][] => {
-  const result: [Vec2, Vec2][] = [];
-  for (const wall of project.walls) {
-    for (let i = 0; i < wall.points.length - 1; i += 1) result.push([wall.points[i], wall.points[i + 1]]);
-  }
-  return result;
-};
+export interface SnapContext {
+  metersPerPixel: number;
+}
 
-export const applySnapping = (point: Vec2, project: Project, snap: SnapState, gridM: number): Vec2 => {
-  const vertices = project.walls.flatMap((w) => w.points);
-  const segs = collectSegments(project);
-  const hits = [];
+export interface SnapResult {
+  point: Vec2;
+  active?: SnapState['active'];
+}
+
+export const collectVertices = (project: Project): Vec2[] => [
+  ...project.walls.flatMap((wall) => [wall.p1, wall.p2]),
+  ...project.rooms.flatMap((room) => {
+    const x = room.origin.x;
+    const y = room.origin.y;
+    const w = room.widthM;
+    const h = room.heightM;
+    return [
+      { x, y },
+      { x: x + w, y },
+      { x: x + w, y: y + h },
+      { x, y: y + h }
+    ];
+  }),
+  ...project.obstacles.flatMap((obs) => obs.polygon)
+];
+
+export const applySnapping = (
+  point: Vec2,
+  project: Project,
+  snap: SnapState,
+  context: SnapContext
+): SnapResult => {
+  const thresholdM = project.settings.snapThresholdPx * context.metersPerPixel;
+  const candidates: Array<{ point: Vec2; active: SnapState['active']; dist: number }> = [];
+
   if (snap.vertex) {
-    const h = nearestVertex(point, vertices);
-    if (h) hits.push(h);
+    const vertexHit = nearestVertex(point, collectVertices(project));
+    if (vertexHit && vertexHit.dist <= thresholdM) {
+      candidates.push({ point: vertexHit.point, active: 'vertex', dist: vertexHit.dist });
+    }
   }
-  if (snap.edge) {
-    const h = nearestPointOnSegments(point, segs);
-    if (h) hits.push(h);
+
+  if (snap.grid) {
+    const gridHit = snapToGrid(point, project.settings.gridSizeM);
+    candidates.push({ point: gridHit.point, active: 'grid', dist: gridHit.dist });
   }
-  if (snap.midpoint) {
-    const h = nearestMidpoint(point, segs);
-    if (h) hits.push(h);
+
+  if (candidates.length === 0) {
+    return { point };
   }
-  if (hits.length > 0) return hits.sort((a, b) => a.dist - b.dist)[0].point;
-  if (snap.grid) return { x: Math.round(point.x / gridM) * gridM, y: Math.round(point.y / gridM) * gridM };
-  return point;
+
+  candidates.sort((a, b) => a.dist - b.dist);
+  return { point: candidates[0].point, active: candidates[0].active };
 };

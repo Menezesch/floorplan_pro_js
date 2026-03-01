@@ -5,23 +5,28 @@ export interface Vec2 {
   y: number;
 }
 
-export interface Wall {
-  id: ID;
-  points: Vec2[];
-  thicknessM: number;
-  polygon: Vec2[];
-  roomsLeft: ID[];
-  roomsRight: ID[];
+export interface ProjectSettings {
+  defaultWallThicknessM: number;
+  defaultCeilingHeightM: number;
+  gridSizeM: number;
+  snapThresholdPx: number;
+  planOrigin: Vec2;
 }
 
-export interface Room {
+export interface WallSegment {
+  id: ID;
+  p1: Vec2;
+  p2: Vec2;
+  thicknessM: number;
+}
+
+export interface RectangleRoom {
   id: ID;
   name: string;
-  boundary: Vec2[];
-  wallIds: ID[];
-  areaM2: number;
-  perimeterM: number;
-  label?: Vec2;
+  origin: Vec2;
+  widthM: number;
+  heightM: number;
+  classification: 'internal' | 'external';
 }
 
 export interface Obstacle {
@@ -33,27 +38,26 @@ export interface Obstacle {
 export interface Opening {
   id: ID;
   wallId: ID;
-  distanceAlongM: number;
+  offsetAlongWallM: number;
   widthM: number;
-  type: 'door' | 'window';
-  orientation: 'left' | 'right' | 'in' | 'out';
+  type: 'window' | 'door';
 }
 
-export type ToolName = 'select' | 'wall' | 'roomRect' | 'obstacle' | 'measure' | 'opening';
+export type ToolName = 'select' | 'wall' | 'obstacle' | 'room' | 'window' | 'door';
 
 export interface ProjectMeta {
   name: string;
   created: string;
   modified: string;
-  gridM: number;
 }
 
 export interface Project {
-  version: '1.0';
+  version: '1.1';
   units: 'm';
   meta: ProjectMeta;
-  walls: Wall[];
-  rooms: Room[];
+  settings: ProjectSettings;
+  walls: WallSegment[];
+  rooms: RectangleRoom[];
   obstacles: Obstacle[];
   openings: Opening[];
 }
@@ -61,7 +65,5 @@ export interface Project {
 export interface SnapState {
   grid: boolean;
   vertex: boolean;
-  edge: boolean;
-  midpoint: boolean;
-  active?: 'grid' | 'vertex' | 'edge' | 'midpoint' | 'angle';
+  active?: 'grid' | 'vertex';
 }
