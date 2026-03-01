@@ -13,9 +13,11 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "konva": "^9.3.22",
     "nanoid": "^5.1.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-konva": "^18.2.10",
     "zustand": "^4.5.5"
   },
   "devDependencies": {
