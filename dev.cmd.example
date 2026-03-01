@@ -1,0 +1,4 @@
+@echo off
+set NODE_PATH=TUPATH
+set PATH=%NODE_PATH%;%PATH%
+cmd
