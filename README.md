@@ -3,7 +3,7 @@
 Web-based electrical planning editor for quick top-view floor plans in real-world meters.
 
 ## MVP Features
-- SVG CAD-lite editor with left tools panel, center canvas, right properties panel.
+- Konva CAD-lite editor with left tools panel, center canvas, right properties panel.
 - Wall centerline drawing with generated wall polygons.
 - Rectangular room tool + room model foundation.
 - Obstacle/no-go polygon drawing.
@@ -28,7 +28,8 @@ npm run dev
 | W | Wall tool |
 | R | Rect Room tool |
 | O | Obstacle tool |
-| M | Measure tool |
+| D | Door tool |
+| N | Window tool |
 | Delete | Delete selection |
 | Ctrl+Z / Ctrl+Y | Undo / Redo |
 | Ctrl+S | Save XML |
@@ -43,3 +44,12 @@ npm run dev
 
 ## Development
 See `docs/COMMANDS.md`, `docs/DATA_MODEL.md`, `docs/GEOMETRY.md`, and `docs/ROADMAP.md`.
+
+
+## Tool Usage (Phase 2)
+- **Select (V):** click to select walls/rooms/obstacles/openings; drag selected entity to move it.
+- **Wall (W):** click start point, move cursor, click end point; `Esc` cancels active wall preview.
+- **Rect Room (R):** click-drag to place a snapped room rectangle (defaults: `name=Room`, `classification=internal`).
+- **Obstacle (O):** click-drag to place a snapped rectangular obstacle.
+- **Door (D):** with wall selected or by clicking wall, place a door opening (default width `0.9m`).
+- **Window (N):** with wall selected or by clicking wall, place a window opening (default width `1.2m`).

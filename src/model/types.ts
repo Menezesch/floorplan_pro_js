@@ -17,6 +17,10 @@ export interface Wall {
 export interface Room {
   id: ID;
   name: string;
+  classification?: 'internal' | 'external';
+  origin?: Vec2;
+  widthM?: number;
+  heightM?: number;
   boundary: Vec2[];
   wallIds: ID[];
   areaM2: number;
@@ -27,6 +31,9 @@ export interface Room {
 export interface Obstacle {
   id: ID;
   type: 'no_go';
+  origin?: Vec2;
+  widthM?: number;
+  heightM?: number;
   polygon: Vec2[];
 }
 
@@ -39,7 +46,7 @@ export interface Opening {
   orientation: 'left' | 'right' | 'in' | 'out';
 }
 
-export type ToolName = 'select' | 'wall' | 'roomRect' | 'obstacle' | 'measure' | 'opening';
+export type ToolName = 'select' | 'wall' | 'roomRect' | 'obstacle' | 'door' | 'window';
 
 export interface ProjectMeta {
   name: string;
