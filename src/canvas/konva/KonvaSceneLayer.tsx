@@ -23,6 +23,7 @@ interface Props {
 }
 
 const flattenPoints = (points: { x: number; y: number }[]) => points.flatMap((p) => [p.x, p.y]);
+const wallInsetForThickness = (thicknessM: number) => Math.max(0.01, Math.min(0.03, thicknessM * 0.3));
 
 const openingGeometry = (project: Project, opening: Opening) => {
   const wall = project.walls.find((w) => w.id === opening.wallId);
@@ -84,8 +85,9 @@ const KonvaSceneLayer = ({ project, selectedId, selectedKind, activeTool, hovere
           <Group key={wall.id}>
             {segments.map(([s, e], i) => {
               const outer = wallSegmentToPolygon(s, e, wall.thicknessM);
-              const innerT = Math.max(0, wall.thicknessM - 0.06);
-              const inner = innerT > 0.015 ? wallSegmentToPolygon(s, e, innerT) : undefined;
+              const inset = wallInsetForThickness(wall.thicknessM);
+              const innerT = wall.thicknessM - inset * 2;
+              const inner = innerT > 0.01 ? wallSegmentToPolygon(s, e, innerT) : undefined;
               return (
                 <Group key={`${wall.id}-${i}`} entityType="edge" entityId={wall.id} onMouseDown={() => onSelect(wall.id, 'edge')}>
                   <Line points={flattenPoints(outer)} closed fill={selectedId === wall.id && selectedKind === 'edge' ? '#334155' : '#1f2937'} opacity={0.95} listening />
@@ -103,9 +105,18 @@ const KonvaSceneLayer = ({ project, selectedId, selectedKind, activeTool, hovere
         const show = activeTool === 'move' || hoveredVertexId === v.id || (selectedKind === 'vertex' && selectedId === v.id) || (selectedKind === 'edge' && project.wallEdges.some((e) => e.id === selectedId && (e.v1Id === v.id || e.v2Id === v.id)));
         return (
           <Group key={v.id}>
-            {(degreeMap.get(v.id) ?? 0) >= 2 && (
-              <Rect x={v.x - (Math.max(0.12, thicknessMap.get(v.id) ?? 0.15) / 2)} y={v.y - (Math.max(0.12, thicknessMap.get(v.id) ?? 0.15) / 2)} width={Math.max(0.12, thicknessMap.get(v.id) ?? 0.15)} height={Math.max(0.12, thicknessMap.get(v.id) ?? 0.15)} fill="#1f2937" listening={false} />
-            )}
+            {(degreeMap.get(v.id) ?? 0) >= 2 && (() => {
+              const t = thicknessMap.get(v.id) ?? 0.15;
+              const inset = wallInsetForThickness(t);
+              const inner = t - inset * 2;
+              return (
+                <>
+                  <Rect x={v.x - t / 2} y={v.y - t / 2} width={t} height={t} fill="#1f2937" listening={false} />
+                  {inner > 0.01 && <Rect x={v.x - inner / 2} y={v.y - inner / 2} width={inner} height={inner} fill="#ffffff" listening={false} />}
+                </>
+              );
+            })()}
+
             {show && (
               <Group entityType="vertex" entityId={v.id} onMouseDown={() => onSelect(v.id, 'vertex')}>
                 <Circle x={v.x} y={v.y} radius={vertexHandleRadius} fill={v.locked ? '#f59e0b' : '#0ea5e9'} stroke="#0f172a" strokeWidth={0.01} />

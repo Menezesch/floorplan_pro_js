@@ -1,16 +1,5 @@
-import { measureDistance } from '../../geometry/measure';
-import type { Wall } from '../../model/types';
+import { pickNearestEdge, projectPointOnSegment } from '../../geometry/edgePick';
 import type { ToolEventHandlers } from './shared';
-
-const projectPointOnWall = (point: { x: number; y: number }, wall: Wall) => {
-  const [a, b] = wall.points;
-  const abx = b.x - a.x;
-  const aby = b.y - a.y;
-  const len2 = abx ** 2 + aby ** 2;
-  const t = Math.max(0, Math.min(1, ((point.x - a.x) * abx + (point.y - a.y) * aby) / (len2 || 1)));
-  const len = measureDistance(a, b);
-  return t * len;
-};
 
 export const createMoveToolHandlers = (): ToolEventHandlers => {
   let dragStart: { x: number; y: number } | null = null;
@@ -18,10 +7,22 @@ export const createMoveToolHandlers = (): ToolEventHandlers => {
 
   return {
     onPointerDown: (ctx, actions) => {
+      const toleranceM = 12 / Math.max(1e-6, ctx.pixelsPerMeter);
+      const nearestEdge = pickNearestEdge(ctx.project, ctx.rawWorld, toleranceM);
+      if (ctx.hit.kind === 'edge' && nearestEdge?.edgeId) {
+        actions.setSelected(nearestEdge.edgeId, 'edge');
+        dragStart = ctx.snapped.point;
+        dragEntity = { kind: 'edge', id: nearestEdge.edgeId };
+        return;
+      }
       if (ctx.hit.id && ctx.hit.kind !== 'none') {
         actions.setSelected(ctx.hit.id, ctx.hit.kind);
         dragStart = ctx.snapped.point;
         dragEntity = { kind: ctx.hit.kind, id: ctx.hit.id };
+      } else if (nearestEdge?.edgeId) {
+        actions.setSelected(nearestEdge.edgeId, 'edge');
+        dragStart = ctx.snapped.point;
+        dragEntity = { kind: 'edge', id: nearestEdge.edgeId };
       } else {
         actions.setSelected(undefined);
         dragStart = null;
@@ -34,7 +35,8 @@ export const createMoveToolHandlers = (): ToolEventHandlers => {
         const opening = ctx.project.openings.find((o) => o.id === dragEntity?.id);
         const wall = opening ? ctx.project.walls.find((w) => w.id === opening.wallId) : undefined;
         if (!wall) return;
-        actions.moveOpeningAlongWall(dragEntity.id, projectPointOnWall(ctx.snapped.point, wall));
+        const seg = projectPointOnSegment(ctx.rawWorld, wall.points[0], wall.points[1]);
+        actions.moveOpeningAlongWall(dragEntity.id, seg.distanceAlongM);
         return;
       }
       const delta = { x: ctx.snapped.point.x - dragStart.x, y: ctx.snapped.point.y - dragStart.y };
@@ -43,6 +45,7 @@ export const createMoveToolHandlers = (): ToolEventHandlers => {
       if (dragEntity.kind === 'edge') actions.moveEdge(dragEntity.id, delta);
       if (dragEntity.kind === 'room') actions.moveRoom(dragEntity.id, delta);
       if (dragEntity.kind === 'obstacle') actions.moveObstacle(dragEntity.id, delta);
+      // snapping during vertex drag: next delta is computed from snapped point
       dragStart = ctx.snapped.point;
     },
     onPointerUp: () => {
