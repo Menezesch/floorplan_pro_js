@@ -1,35 +1,21 @@
 # Geometry Notes
 
-## Units and Coordinates
-- Canonical world units are meters.
-- Render mapping is `1m = 100 SVG units`.
-- Status bar shows:
-  - World coordinates `(x,y)`.
-  - Plan coordinates `(x - planOrigin.x, y - planOrigin.y)`.
+## Units Mapping
+- Canonical world units: meters.
+- Render mapping: `1 m = 100 SVG units` (1 unit = 1 cm).
+- Conversions live in `src/geometry/units.ts`.
 
-## Stable SVG + Zoom
-- Viewport uses a stable `viewBox`.
-- Wheel zoom is handled with a **native** `wheel` listener registered with `{ passive: false }` to avoid passive-listener warnings while allowing `preventDefault()`.
-- Cursor-anchored zoom keeps the same world point under the mouse when zooming.
+## ViewBox
+- SVG viewport uses mutable `viewBox` for zoom/pan.
+- Cursor world coordinates are derived from screen coordinates through SVG CTM inverse.
 
-## Walls
-- MVP walls are single segments (`p1 -> p2`) with per-wall thickness.
-- Rendering uses SVG `<line>` with `strokeWidth = thicknessM` converted to SVG units.
-- This is deliberate for reliability and visibility; polygonal wall booleans are deferred.
+## Wall Offset
+- MVP uses deterministic segment offset:
+  - Given segment AB and thickness `t`, compute unit normal N.
+  - Polygon is `[A+N*t/2, B+N*t/2, B-N*t/2, A-N*t/2]`.
+- Tradeoff: no advanced polyline corner unions yet; maintainable foundation for phase-2 joins/booleans.
 
 ## Snapping
-- Default grid: `0.05m`.
-- Magnetic priorities: vertex, then grid fallback.
-- Snap threshold in project settings is pixel-based and converted to meters each frame.
-- Snap indicator is rendered at the active snapped point.
-
-## Rectangle detection
-- Auto-room conversion checks the latest 4 wall segments:
-  - closed rectangle (4 unique corners),
-  - axis-aligned edges,
-  - non-zero width/height.
-- If valid, 4 walls are converted into one `RectangleRoom`.
-
-## Dependencies choice
-- Added `lucide-react` for consistent, lightweight tool iconography.
-- No heavy CAD library introduced in this iteration to keep interactions deterministic and maintainable.
+- Priority: vertex > edge > midpoint > grid fallback.
+- Grid snap rounds to nearest grid step in meters.
+- Angle snap hook is planned for shift-constrained drawing in next iteration.

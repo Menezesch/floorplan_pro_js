@@ -3,9 +3,12 @@ import Layout from './components/Layout';
 import TopBar from './components/TopBar';
 import Toasts from './components/Toasts';
 import { useAppStore } from './model/store';
+import { popLatestAutosave, saveAutosave } from './io/autosave';
 
 const App = () => {
   const [toasts, setToasts] = useState<string[]>([]);
+  const project = useAppStore((s) => s.project);
+  const replaceProject = useAppStore((s) => s.replaceProject);
   const hasUnsavedChanges = useAppStore((s) => s.hasUnsavedChanges);
   const undo = useAppStore((s) => s.undo);
   const redo = useAppStore((s) => s.redo);
@@ -18,10 +21,23 @@ const App = () => {
   };
 
   useEffect(() => {
-    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+    const autosaveTimer = setInterval(() => saveAutosave(project), 15000);
+    return () => clearInterval(autosaveTimer);
+  }, [project]);
+
+  useEffect(() => {
+    const autosave = popLatestAutosave();
+    if (autosave && confirm(`Recover autosave from ${new Date(autosave.ts).toLocaleString()}?`)) {
+      replaceProject(autosave.project);
+      addToast('Recovered autosave.');
+    }
+  }, [replaceProject]);
+
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
       if (hasUnsavedChanges) {
-        event.preventDefault();
-        event.returnValue = '';
+        e.preventDefault();
+        e.returnValue = '';
       }
     };
     window.addEventListener('beforeunload', onBeforeUnload);
@@ -29,23 +45,21 @@ const App = () => {
   }, [hasUnsavedChanges]);
 
   useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if (event.ctrlKey && event.key.toLowerCase() === 'z') {
-        event.preventDefault();
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
         undo();
       }
-      if (event.ctrlKey && event.key.toLowerCase() === 'y') {
-        event.preventDefault();
+      if (e.ctrlKey && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
         redo();
       }
-      if (event.key === 'Delete') deleteSelection();
-      if (event.key === 'Escape') setTool('select');
-      if (event.key.toLowerCase() === 'v') setTool('select');
-      if (event.key.toLowerCase() === 'w') setTool('wall');
-      if (event.key.toLowerCase() === 'o') setTool('obstacle');
-      if (event.key.toLowerCase() === 'r') setTool('room');
-      if (event.key.toLowerCase() === 'n') setTool('window');
-      if (event.key.toLowerCase() === 'd') setTool('door');
+      if (e.key === 'Delete') deleteSelection();
+      if (e.key.toLowerCase() === 'v') setTool('select');
+      if (e.key.toLowerCase() === 'w') setTool('wall');
+      if (e.key.toLowerCase() === 'r') setTool('roomRect');
+      if (e.key.toLowerCase() === 'o') setTool('obstacle');
+      if (e.key.toLowerCase() === 'm') setTool('measure');
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
