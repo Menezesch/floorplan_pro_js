@@ -59,6 +59,8 @@ const App = () => {
       if (e.key.toLowerCase() === 'w') setTool('wall');
       if (e.key.toLowerCase() === 'r') setTool('roomRect');
       if (e.key.toLowerCase() === 'o') setTool('obstacle');
+      if (e.key.toLowerCase() === 'd') setTool('door');
+      if (e.key.toLowerCase() === 'n') setTool('window');
       if (e.key.toLowerCase() === 'm') setTool('measure');
     };
     window.addEventListener('keydown', handler);
