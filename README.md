@@ -1,4 +1,4 @@
-# Floorplan Drawer — Pro CAD Edition (Local JS, /css, /assets)
+# Floorplan Drawer — Pro CAD Edition (Local JS, /css, /assets) 
 
 Changes in this package:
 - **/js** folder contains `app.js` and (your) `svg.min.js`
