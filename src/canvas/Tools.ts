@@ -8,5 +8,7 @@ export const TOOLS: { key: string; name: ToolName; label: string }[] = [
   { key: 'O', name: 'obstacle', label: 'Obstacle' },
   { key: 'D', name: 'door', label: 'Door' },
   { key: 'N', name: 'window', label: 'Window' },
-  { key: 'M', name: 'measure', label: 'Measure' }
+  { key: 'M', name: 'measure', label: 'Measure' },
+  { key: 'Z', name: 'divider', label: 'Room Divider' },
+  { key: 'F', name: 'symbol', label: 'Symbol' }
 ];

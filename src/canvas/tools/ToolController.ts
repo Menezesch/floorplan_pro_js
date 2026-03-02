@@ -7,6 +7,8 @@ import { createRoomRectToolHandlers } from './RoomRectTool';
 import { createObstacleToolHandlers } from './ObstacleTool';
 import { createOpeningToolHandlers } from './OpeningTool';
 import { createMeasureToolHandlers } from './MeasureTool';
+import { createDividerToolHandlers } from './DividerTool';
+import { createSymbolToolHandlers } from './SymbolTool';
 
 export const createToolHandlers = (tool: ToolName): ToolEventHandlers => {
   if (tool === 'select') return createSelectToolHandlers();
@@ -17,5 +19,7 @@ export const createToolHandlers = (tool: ToolName): ToolEventHandlers => {
   if (tool === 'door') return createOpeningToolHandlers('door');
   if (tool === 'window') return createOpeningToolHandlers('window');
   if (tool === 'measure') return createMeasureToolHandlers();
+  if (tool === 'divider') return createDividerToolHandlers();
+  if (tool === 'symbol') return createSymbolToolHandlers();
   return {};
 };

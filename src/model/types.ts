@@ -28,6 +28,7 @@ export interface WallEdge {
   v2Id: ID;
   thicknessM: number;
   locked?: boolean;
+  isWaterWall?: boolean;
 }
 
 export interface Room {
@@ -65,7 +66,27 @@ export interface Opening {
   locked?: boolean;
 }
 
-export type ToolName = 'select' | 'move' | 'wall' | 'roomRect' | 'obstacle' | 'door' | 'window' | 'measure';
+export interface RoomDivider {
+  id: ID;
+  start: Vec2;
+  end: Vec2;
+  name: string;
+  locked?: boolean;
+}
+
+export type SymbolType = 'chair' | 'table' | 'sofa' | 'bed' | 'sink' | 'toilet' | 'bathtub' | 'desk';
+
+export interface FloorSymbol {
+  id: ID;
+  type: SymbolType;
+  position: Vec2;
+  rotation: number;
+  widthM: number;
+  heightM: number;
+  locked?: boolean;
+}
+
+export type ToolName = 'select' | 'move' | 'wall' | 'roomRect' | 'obstacle' | 'door' | 'window' | 'measure' | 'divider' | 'symbol';
 
 export interface ProjectMeta {
   name: string;
@@ -84,6 +105,8 @@ export interface Project {
   rooms: Room[];
   obstacles: Obstacle[];
   openings: Opening[];
+  roomDividers?: RoomDivider[];
+  floorSymbols?: FloorSymbol[];
 }
 
 export interface SnapState {

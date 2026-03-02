@@ -3,7 +3,7 @@ import type { ToolEventHandlers } from './shared';
 
 export const createMoveToolHandlers = (): ToolEventHandlers => {
   let dragStart: { x: number; y: number } | null = null;
-  let dragEntity: { kind: 'vertex' | 'edge' | 'room' | 'obstacle' | 'opening'; id: string } | null = null;
+  let dragEntity: { kind: 'vertex' | 'edge' | 'room' | 'obstacle' | 'opening' | 'divider' | 'symbol'; id: string } | null = null;
 
   return {
     onPointerDown: (ctx, actions) => {
@@ -18,7 +18,7 @@ export const createMoveToolHandlers = (): ToolEventHandlers => {
       if (ctx.hit.id && ctx.hit.kind !== 'none') {
         actions.setSelected(ctx.hit.id, ctx.hit.kind);
         dragStart = ctx.snapped.point;
-        dragEntity = { kind: ctx.hit.kind, id: ctx.hit.id };
+        dragEntity = { kind: ctx.hit.kind as Exclude<typeof ctx.hit.kind, 'none'>, id: ctx.hit.id };
       } else if (nearestEdge?.edgeId) {
         actions.setSelected(nearestEdge.edgeId, 'edge');
         dragStart = ctx.snapped.point;
@@ -45,7 +45,8 @@ export const createMoveToolHandlers = (): ToolEventHandlers => {
       if (dragEntity.kind === 'edge') actions.moveEdge(dragEntity.id, delta);
       if (dragEntity.kind === 'room') actions.moveRoom(dragEntity.id, delta);
       if (dragEntity.kind === 'obstacle') actions.moveObstacle(dragEntity.id, delta);
-      // snapping during vertex drag: next delta is computed from snapped point
+      if (dragEntity.kind === 'divider') actions.moveRoomDivider(dragEntity.id, delta);
+      if (dragEntity.kind === 'symbol') actions.moveFloorSymbol(dragEntity.id, delta);
       dragStart = ctx.snapped.point;
     },
     onPointerUp: () => {

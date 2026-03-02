@@ -1,13 +1,15 @@
 import { create } from 'zustand';
 import { nanoid } from 'nanoid';
-import type { ID, Obstacle, Opening, Project, Room, SnapState, ToolName, Vec2, Wall, WallEdge, WallVertex } from './types';
+import type { FloorSymbol, ID, Obstacle, Opening, Project, Room, RoomDivider, SnapState, SymbolType, ToolName, Vec2, Wall, WallEdge, WallVertex } from './types';
 import { createHistory, pushHistory, redoHistory, undoHistory } from './history';
 import { wallSegmentToPolygon } from '../geometry/polylineOffset';
 import { polygonArea, polygonPerimeter } from '../geometry/polygonOps';
 import { measureDistance } from '../geometry/measure';
+import { MIN_VIEW_SIZE_M, MAX_VIEW_SIZE_M, clamp } from '../canvas/konva/ViewportTransform';
 
 const nowIso = () => new Date().toISOString();
 const TOPOLOGY_EPSILON_M = 0.01;
+const DEFAULT_VIEW_W_M = 30;
 
 const rectFromCorners = (a: Vec2, b: Vec2) => {
   const minX = Math.min(a.x, b.x);
@@ -66,7 +68,9 @@ const newProject = (): Project => ({
   wallEdges: [],
   rooms: [],
   obstacles: [],
-  openings: []
+  openings: [],
+  roomDividers: [],
+  floorSymbols: []
 });
 
 interface ViewState {
@@ -87,25 +91,32 @@ interface AppStore {
   project: Project;
   history: ReturnType<typeof createHistory>;
   activeTool: ToolName;
+  activeSymbolType: SymbolType;
   selectedId?: ID;
-  selectedKind?: 'vertex' | 'edge' | 'room' | 'obstacle' | 'opening';
+  selectedKind?: 'vertex' | 'edge' | 'room' | 'obstacle' | 'opening' | 'divider' | 'symbol';
   draft: Vec2[];
   snap: SnapState;
   view: ViewState;
   measure: MeasureState;
   hasUnsavedChanges: boolean;
+  gridVisible: boolean;
   setTool: (t: ToolName) => void;
+  setActiveSymbolType: (t: SymbolType) => void;
   setSelected: (id?: ID, kind?: AppStore['selectedKind']) => void;
   addWallSegment: (a: Vec2, b: Vec2, thicknessM?: number) => ID;
   addRoomRect: (a: Vec2, b: Vec2) => ID;
   addObstacleRect: (a: Vec2, b: Vec2) => ID;
   addOpeningToWall: (wallId: ID, type: Opening['type'], distanceAlongM: number, widthM?: number) => ID | undefined;
+  addRoomDivider: (start: Vec2, end: Vec2, name?: string) => ID;
+  addFloorSymbol: (type: SymbolType, position: Vec2) => ID;
   updateWallThickness: (id: ID, thicknessM: number) => void;
   updateRoom: (id: ID, patch: Partial<Pick<Room, 'name' | 'classification' | 'origin' | 'widthM' | 'heightM' | 'locked'>>) => void;
   updateObstacle: (id: ID, patch: Partial<Pick<Obstacle, 'origin' | 'widthM' | 'heightM' | 'locked'>>) => void;
   updateOpening: (id: ID, patch: Partial<Pick<Opening, 'widthM' | 'distanceAlongM' | 'locked'>>) => void;
   updateVertex: (id: ID, patch: Partial<Pick<WallVertex, 'locked'>>) => void;
-  updateEdge: (id: ID, patch: Partial<Pick<WallEdge, 'locked' | 'thicknessM'>>) => void;
+  updateEdge: (id: ID, patch: Partial<Pick<WallEdge, 'locked' | 'thicknessM' | 'isWaterWall'>>) => void;
+  updateRoomDivider: (id: ID, patch: Partial<Pick<RoomDivider, 'name' | 'locked'>>) => void;
+  updateFloorSymbol: (id: ID, patch: Partial<Pick<FloorSymbol, 'rotation' | 'widthM' | 'heightM' | 'locked'>>) => void;
   updateEntityName: (id: ID, name: string) => void;
   moveWall: (id: ID, delta: Vec2) => void;
   moveVertex: (id: ID, delta: Vec2) => void;
@@ -113,6 +124,8 @@ interface AppStore {
   moveRoom: (id: ID, delta: Vec2) => void;
   moveObstacle: (id: ID, delta: Vec2) => void;
   moveOpeningAlongWall: (id: ID, distanceAlongM: number) => void;
+  moveRoomDivider: (id: ID, delta: Vec2) => void;
+  moveFloorSymbol: (id: ID, delta: Vec2) => void;
   setMeasure: (patch: Partial<MeasureState>) => void;
   clearMeasure: () => void;
   deleteSelection: () => void;
@@ -120,6 +133,8 @@ interface AppStore {
   redo: () => void;
   replaceProject: (project: Project) => void;
   setView: (next: Partial<ViewState>) => void;
+  fitToScreen: () => void;
+  toggleGrid: () => void;
   markSaved: () => void;
 }
 
@@ -165,7 +180,9 @@ const normalizeProject = (project: Project): Project => {
       const maxY = Math.max(...ys);
       return { ...obs, origin: obs.origin ?? { x: minX, y: minY }, widthM: Number.isFinite(obs.widthM) ? obs.widthM : maxX - minX, heightM: Number.isFinite(obs.heightM) ? obs.heightM : maxY - minY, locked: obs.locked ?? false };
     }),
-    openings: project.openings.map((o) => ({ ...o, locked: o.locked ?? false }))
+    openings: project.openings.map((o) => ({ ...o, locked: o.locked ?? false })),
+    roomDividers: project.roomDividers ?? [],
+    floorSymbols: project.floorSymbols ?? []
   };
 };
 
@@ -180,14 +197,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
   project: normalizeProject(newProject()),
   history: createHistory(),
   activeTool: 'select',
+  activeSymbolType: 'chair',
   selectedId: undefined,
   selectedKind: undefined,
   draft: [],
   snap: { grid: true, vertex: true, edge: true, midpoint: true },
-  view: { x: 0, y: 0, w: 30, h: 20, zoom: 1 / 30 },
+  view: { x: 0, y: 0, w: DEFAULT_VIEW_W_M, h: 20, zoom: 1 / DEFAULT_VIEW_W_M },
   measure: { active: false },
   hasUnsavedChanges: false,
+  gridVisible: true,
   setTool: (activeTool) => set({ activeTool, draft: [], measure: activeTool === 'measure' ? { active: false } : get().measure }),
+  setActiveSymbolType: (activeSymbolType) => set({ activeSymbolType }),
   setSelected: (selectedId, selectedKind) => set({ selectedId, selectedKind }),
   addWallSegment: (a, b, thicknessM = 0.15) => {
     const id = nanoid();
@@ -228,6 +248,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
     withProjectUpdate(set, get, (curr) => ({ ...curr, openings: [...curr.openings, opening] }));
     return id;
   },
+  addRoomDivider: (start, end, name = 'Zone') => {
+    const id = nanoid();
+    withProjectUpdate(set, get, (curr) => ({ ...curr, roomDividers: [...(curr.roomDividers ?? []), { id, start, end, name, locked: false }] }));
+    return id;
+  },
+  addFloorSymbol: (type, position) => {
+    const id = nanoid();
+    withProjectUpdate(set, get, (curr) => ({ ...curr, floorSymbols: [...(curr.floorSymbols ?? []), { id, type, position, rotation: 0, widthM: 0.5, heightM: 0.5, locked: false }] }));
+    return id;
+  },
   updateWallThickness: (id, thicknessM) => withProjectUpdate(set, get, (curr) => ({ ...curr, wallEdges: curr.wallEdges.map((e) => (e.id === id ? { ...e, thicknessM } : e)) })),
   updateRoom: (id, patch) => withProjectUpdate(set, get, (curr) => ({
     ...curr,
@@ -256,9 +286,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
   updateOpening: (id, patch) => withProjectUpdate(set, get, (curr) => ({ ...curr, openings: curr.openings.map((o) => (o.id === id ? { ...o, ...patch } : o)) })),
   updateVertex: (id, patch) => withProjectUpdate(set, get, (curr) => ({ ...curr, wallVertices: curr.wallVertices.map((v) => (v.id === id ? { ...v, ...patch } : v)) })),
   updateEdge: (id, patch) => withProjectUpdate(set, get, (curr) => ({ ...curr, wallEdges: curr.wallEdges.map((e) => (e.id === id ? { ...e, ...patch } : e)) })),
+  updateRoomDivider: (id, patch) => withProjectUpdate(set, get, (curr) => ({ ...curr, roomDividers: (curr.roomDividers ?? []).map((d) => (d.id === id ? { ...d, ...patch } : d)) })),
+  updateFloorSymbol: (id, patch) => withProjectUpdate(set, get, (curr) => ({ ...curr, floorSymbols: (curr.floorSymbols ?? []).map((s) => (s.id === id ? { ...s, ...patch } : s)) })),
   updateEntityName: (id, name) => {
     const room = get().project.rooms.find((r) => r.id === id);
     if (room) get().updateRoom(id, { name });
+    const divider = (get().project.roomDividers ?? []).find((d) => d.id === id);
+    if (divider) get().updateRoomDivider(id, { name });
   },
   moveWall: (id, delta) => get().moveEdge(id, delta),
   moveVertex: (id, delta) => {
@@ -297,6 +331,22 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const half = opening.widthM / 2;
     get().updateOpening(id, { distanceAlongM: Math.max(half, Math.min(len - half, distanceAlongM)) });
   },
+  moveRoomDivider: (id, delta) => {
+    const divider = (get().project.roomDividers ?? []).find((d) => d.id === id);
+    if (!divider || divider.locked) return;
+    withProjectUpdate(set, get, (curr) => ({
+      ...curr,
+      roomDividers: (curr.roomDividers ?? []).map((d) => d.id === id ? { ...d, start: { x: d.start.x + delta.x, y: d.start.y + delta.y }, end: { x: d.end.x + delta.x, y: d.end.y + delta.y } } : d)
+    }));
+  },
+  moveFloorSymbol: (id, delta) => {
+    const sym = (get().project.floorSymbols ?? []).find((s) => s.id === id);
+    if (!sym || sym.locked) return;
+    withProjectUpdate(set, get, (curr) => ({
+      ...curr,
+      floorSymbols: (curr.floorSymbols ?? []).map((s) => s.id === id ? { ...s, position: { x: s.position.x + delta.x, y: s.position.y + delta.y } } : s)
+    }));
+  },
   setMeasure: (patch) => set((state) => ({ measure: { ...state.measure, ...patch } })),
   clearMeasure: () => set({ measure: { active: false } }),
   deleteSelection: () => {
@@ -307,6 +357,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
         const removedEdgeIds = curr.wallEdges.filter((e) => e.v1Id === selectedId || e.v2Id === selectedId).map((e) => e.id);
         return { ...curr, wallVertices: curr.wallVertices.filter((v) => v.id !== selectedId), wallEdges: curr.wallEdges.filter((e) => e.v1Id !== selectedId && e.v2Id !== selectedId), openings: curr.openings.filter((o) => !removedEdgeIds.includes(o.wallId)) };
       }
+      if (selectedKind === 'divider') return { ...curr, roomDividers: (curr.roomDividers ?? []).filter((d) => d.id !== selectedId) };
+      if (selectedKind === 'symbol') return { ...curr, floorSymbols: (curr.floorSymbols ?? []).filter((s) => s.id !== selectedId) };
       const wallDeleted = curr.wallEdges.some((e) => e.id === selectedId);
       return {
         ...curr,
@@ -330,5 +382,37 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
   replaceProject: (project) => set({ project: normalizeProject(project), history: createHistory(), hasUnsavedChanges: false }),
   setView: (next) => set((state) => ({ view: { ...state.view, ...next } })),
+  fitToScreen: () => {
+    const { project, view } = get();
+    const points: Vec2[] = [
+      ...project.wallVertices.map((v) => ({ x: v.x, y: v.y })),
+      ...project.rooms.flatMap((r) => r.boundary),
+      ...project.obstacles.flatMap((o) => o.polygon),
+      ...(project.roomDividers ?? []).flatMap((d) => [d.start, d.end]),
+      ...(project.floorSymbols ?? []).map((s) => s.position)
+    ];
+    if (points.length === 0) {
+      set({ view: { x: 0, y: 0, w: DEFAULT_VIEW_W_M, h: (DEFAULT_VIEW_W_M * view.h) / view.w, zoom: 1 / DEFAULT_VIEW_W_M } });
+      return;
+    }
+    const xs = points.map((p) => p.x);
+    const ys = points.map((p) => p.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const padFactor = 1.15;
+    const contentW = Math.max(0.5, maxX - minX) * padFactor;
+    const contentH = Math.max(0.5, maxY - minY) * padFactor;
+    const aspect = view.w / Math.max(1e-6, view.h);
+    const viewH = contentH;
+    const viewW = Math.max(contentW, viewH * aspect);
+    const w = clamp(viewW, MIN_VIEW_SIZE_M, MAX_VIEW_SIZE_M);
+    const h = w / aspect;
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    set({ view: { x: cx - w / 2, y: cy - h / 2, w, h, zoom: 1 / w } });
+  },
+  toggleGrid: () => set((s) => ({ gridVisible: !s.gridVisible })),
   markSaved: () => set({ hasUnsavedChanges: false })
 }));

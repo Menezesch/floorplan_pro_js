@@ -1,4 +1,4 @@
-import type { Project, Vec2 } from '../model/types';
+import type { FloorSymbol, Project, RoomDivider, Vec2 } from '../model/types';
 import { validateProject } from '../model/validators';
 
 const fmt = (n: number): string => n.toFixed(3);
@@ -26,7 +26,7 @@ export const exportProjectXml = (project: Project): string => `<?xml version="1.
 ${project.wallVertices.map((v) => `    <vertex id="${escapeXmlAttr(v.id)}" x="${fmt(v.x)}" y="${fmt(v.y)}" locked="${v.locked ? 'true' : 'false'}"/>`).join('\n')}
   </wallVertices>
   <wallEdges>
-${project.wallEdges.map((e) => `    <edge id="${escapeXmlAttr(e.id)}" v1Id="${escapeXmlAttr(e.v1Id)}" v2Id="${escapeXmlAttr(e.v2Id)}" thickness="${fmt(e.thicknessM)}" locked="${e.locked ? 'true' : 'false'}"/>`).join('\n')}
+${project.wallEdges.map((e) => `    <edge id="${escapeXmlAttr(e.id)}" v1Id="${escapeXmlAttr(e.v1Id)}" v2Id="${escapeXmlAttr(e.v2Id)}" thickness="${fmt(e.thicknessM)}" locked="${e.locked ? 'true' : 'false'}" isWaterWall="${e.isWaterWall ? 'true' : 'false'}"/>`).join('\n')}
   </wallEdges>
   <walls>
 ${project.walls.map((w) => `    <wall id="${w.id}" thickness="${fmt(w.thicknessM)}" roomsLeft="" roomsRight=""><centerline>${ptsToText(w.points)}</centerline></wall>`).join('\n')}
@@ -46,6 +46,12 @@ ${project.obstacles.map((o) => {
   <openings>
 ${project.openings.map((o) => `    <opening id="${escapeXmlAttr(o.id)}" wallId="${escapeXmlAttr(o.wallId)}" distanceAlongM="${fmt(o.distanceAlongM)}" widthM="${fmt(o.widthM)}" type="${escapeXmlAttr(o.type)}" orientation="${escapeXmlAttr(o.orientation)}" locked="${o.locked ? 'true' : 'false'}"/>`).join('\n')}
   </openings>
+  <roomDividers>
+${(project.roomDividers ?? []).map((d: RoomDivider) => `    <roomDivider id="${escapeXmlAttr(d.id)}" name="${escapeXmlAttr(d.name)}" startX="${fmt(d.start.x)}" startY="${fmt(d.start.y)}" endX="${fmt(d.end.x)}" endY="${fmt(d.end.y)}" locked="${d.locked ? 'true' : 'false'}"/>`).join('\n')}
+  </roomDividers>
+  <floorSymbols>
+${(project.floorSymbols ?? []).map((s: FloorSymbol) => `    <floorSymbol id="${escapeXmlAttr(s.id)}" type="${escapeXmlAttr(s.type)}" posX="${fmt(s.position.x)}" posY="${fmt(s.position.y)}" rotation="${fmt(s.rotation)}" widthM="${fmt(s.widthM)}" heightM="${fmt(s.heightM)}" locked="${s.locked ? 'true' : 'false'}"/>`).join('\n')}
+  </floorSymbols>
 </project>`;
 
 export const importProjectXml = (xmlText: string): { project?: Project; errors: string[] } => {
@@ -67,7 +73,8 @@ export const importProjectXml = (xmlText: string): { project?: Project; errors: 
     v1Id: e.getAttribute('v1Id') ?? '',
     v2Id: e.getAttribute('v2Id') ?? '',
     thicknessM: Number(e.getAttribute('thickness') ?? 0.15),
-    locked: e.getAttribute('locked') === 'true'
+    locked: e.getAttribute('locked') === 'true',
+    isWaterWall: e.getAttribute('isWaterWall') === 'true'
   }));
 
   const walls = Array.from(doc.querySelectorAll('walls wall')).map((wall) => ({
@@ -78,6 +85,24 @@ export const importProjectXml = (xmlText: string): { project?: Project; errors: 
     roomsLeft: [],
     roomsRight: [],
     locked: wall.getAttribute('locked') === 'true'
+  }));
+
+  const roomDividers: import('../model/types').RoomDivider[] = Array.from(doc.querySelectorAll('roomDividers roomDivider')).map((d) => ({
+    id: d.getAttribute('id') ?? crypto.randomUUID(),
+    name: d.getAttribute('name') ?? 'Zone',
+    start: { x: Number(d.getAttribute('startX') ?? 0), y: Number(d.getAttribute('startY') ?? 0) },
+    end: { x: Number(d.getAttribute('endX') ?? 0), y: Number(d.getAttribute('endY') ?? 0) },
+    locked: d.getAttribute('locked') === 'true'
+  }));
+
+  const floorSymbols: import('../model/types').FloorSymbol[] = Array.from(doc.querySelectorAll('floorSymbols floorSymbol')).map((s) => ({
+    id: s.getAttribute('id') ?? crypto.randomUUID(),
+    type: (s.getAttribute('type') ?? 'chair') as import('../model/types').SymbolType,
+    position: { x: Number(s.getAttribute('posX') ?? 0), y: Number(s.getAttribute('posY') ?? 0) },
+    rotation: Number(s.getAttribute('rotation') ?? 0),
+    widthM: Number(s.getAttribute('widthM') ?? 0.5),
+    heightM: Number(s.getAttribute('heightM') ?? 0.5),
+    locked: s.getAttribute('locked') === 'true'
   }));
 
   const project: Project = {
@@ -125,7 +150,9 @@ export const importProjectXml = (xmlText: string): { project?: Project; errors: 
       type: (o.getAttribute('type') as 'door' | 'window') ?? 'door',
       orientation: (o.getAttribute('orientation') as 'left' | 'right' | 'in' | 'out') ?? 'left',
       locked: o.getAttribute('locked') === 'true'
-    }))
+    })),
+    roomDividers,
+    floorSymbols
   };
   const errors = validateProject(project);
   return { project: errors.length ? undefined : project, errors };

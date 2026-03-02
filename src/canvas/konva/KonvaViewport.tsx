@@ -9,6 +9,7 @@ import { applySnapping, type SnapResult } from '../Snap';
 import SnapOverlay from './SnapOverlay';
 import { createToolHandlers } from '../tools/ToolController';
 import type { HitEntity, ToolActions, ToolContext } from '../tools/shared';
+import ZoomControls from '../../components/ZoomControls';
 
 const KonvaViewport = () => {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -16,11 +17,15 @@ const KonvaViewport = () => {
   const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
   const [snapResult, setSnapResult] = useState<SnapResult | null>(null);
   const [wallDraft, setWallDraft] = useState<{ start: { x: number; y: number }; end?: { x: number; y: number } } | null>(null);
+  const [dividerDraft, setDividerDraftState] = useState<{ start: { x: number; y: number }; end?: { x: number; y: number } } | null>(null);
   const [rectDraft, setRectDraftState] = useState<{ start: { x: number; y: number }; end: { x: number; y: number }; kind: 'roomRect' | 'obstacle' } | null>(null);
   const [previewLabel, setPreviewLabelState] = useState<{ text: string; point: { x: number; y: number } } | null>(null);
   const [hoveredVertexId, setHoveredVertexId] = useState<string | undefined>();
   const [isMiddlePanning, setIsMiddlePanning] = useState(false);
   const [panLast, setPanLast] = useState<{ x: number; y: number } | null>(null);
+
+  // Pinch-to-zoom pointer tracking
+  const pinchPointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
 
   const {
     project,
@@ -30,16 +35,22 @@ const KonvaViewport = () => {
     selectedKind,
     setSelected,
     activeTool,
+    activeSymbolType,
     snap,
+    gridVisible,
     addWallSegment,
     addRoomRect,
     addObstacleRect,
     addOpeningToWall,
+    addRoomDivider,
+    addFloorSymbol,
     moveVertex,
     moveEdge,
     moveRoom,
     moveObstacle,
     moveOpeningAlongWall,
+    moveRoomDivider,
+    moveFloorSymbol,
     measure,
     setMeasure,
     clearMeasure
@@ -51,16 +62,22 @@ const KonvaViewport = () => {
     selectedKind: s.selectedKind,
     setSelected: s.setSelected,
     activeTool: s.activeTool,
+    activeSymbolType: s.activeSymbolType,
     snap: s.snap,
+    gridVisible: s.gridVisible,
     addWallSegment: s.addWallSegment,
     addRoomRect: s.addRoomRect,
     addObstacleRect: s.addObstacleRect,
     addOpeningToWall: s.addOpeningToWall,
+    addRoomDivider: s.addRoomDivider,
+    addFloorSymbol: s.addFloorSymbol,
     moveVertex: s.moveVertex,
     moveEdge: s.moveEdge,
     moveRoom: s.moveRoom,
     moveObstacle: s.moveObstacle,
     moveOpeningAlongWall: s.moveOpeningAlongWall,
+    moveRoomDivider: s.moveRoomDivider,
+    moveFloorSymbol: s.moveFloorSymbol,
     measure: s.measure,
     setMeasure: s.setMeasure,
     clearMeasure: s.clearMeasure
@@ -91,7 +108,11 @@ const KonvaViewport = () => {
     const attrs = (evtTarget as { attrs?: Record<string, unknown> })?.attrs;
     const entityType = attrs?.entityType;
     const entityId = attrs?.entityId;
-    if (typeof entityType === 'string' && typeof entityId === 'string' && (entityType === 'vertex' || entityType === 'edge' || entityType === 'room' || entityType === 'obstacle' || entityType === 'opening')) return { kind: entityType, id: entityId };
+    if (
+      typeof entityType === 'string' &&
+      typeof entityId === 'string' &&
+      (entityType === 'vertex' || entityType === 'edge' || entityType === 'room' || entityType === 'obstacle' || entityType === 'opening' || entityType === 'divider' || entityType === 'symbol')
+    ) return { kind: entityType, id: entityId };
     return { kind: 'none' };
   };
 
@@ -105,7 +126,7 @@ const KonvaViewport = () => {
     const nearVertex = project.wallVertices.find((v) => Math.hypot(v.x - rawWorld.x, v.y - rawWorld.y) <= 8 / pixelsPerMeter);
     setHoveredVertexId(nearVertex?.id);
     setSnapResult(snapped);
-    return { tool: activeTool, rawWorld, snapped, pixelsPerMeter, project, snapState: snap, hit: parseHit(e.target), selectedId, selectedKind, shiftKey: e.evt.shiftKey };
+    return { tool: activeTool, rawWorld, snapped, pixelsPerMeter, project, snapState: snap, hit: parseHit(e.target), selectedId, selectedKind, shiftKey: e.evt.shiftKey, activeSymbolType };
   };
 
   const actions: ToolActions = useMemo(
@@ -113,6 +134,8 @@ const KonvaViewport = () => {
       setSelected,
       setWallDraft: (start, end) => setWallDraft(start ? { start, end: end ?? undefined } : null),
       getWallDraft: () => wallDraft,
+      setDividerDraft: (start, end) => setDividerDraftState(start ? { start, end: end ?? undefined } : null),
+      getDividerDraft: () => dividerDraft,
       setRectDraft: (start, end, kind) => setRectDraftState(start && end && kind ? { start, end, kind } : null),
       getRectDraft: () => rectDraft,
       setPreviewLabel: (text, point) => setPreviewLabelState(text && point ? { text, point } : null),
@@ -120,15 +143,19 @@ const KonvaViewport = () => {
       addRoomRect,
       addObstacleRect,
       addOpeningToWall,
+      addRoomDivider,
+      addFloorSymbol,
       moveVertex,
       moveEdge,
       moveRoom,
       moveObstacle,
       moveOpeningAlongWall,
+      moveRoomDivider,
+      moveFloorSymbol,
       setMeasure: (start, end, active) => setMeasure({ start, end, active }),
       clearMeasure
     }),
-    [setSelected, wallDraft, rectDraft, addWallSegment, addRoomRect, addObstacleRect, addOpeningToWall, moveVertex, moveEdge, moveRoom, moveObstacle, moveOpeningAlongWall, setMeasure, clearMeasure]
+    [setSelected, wallDraft, dividerDraft, rectDraft, addWallSegment, addRoomRect, addObstacleRect, addOpeningToWall, addRoomDivider, addFloorSymbol, moveVertex, moveEdge, moveRoom, moveObstacle, moveOpeningAlongWall, moveRoomDivider, moveFloorSymbol, setMeasure, clearMeasure]
   );
 
   useEffect(() => {
@@ -137,10 +164,42 @@ const KonvaViewport = () => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [handlers, actions]);
 
+  // Pinch-to-zoom handlers on the container div
+  const onContainerPointerDown = (e: React.PointerEvent) => {
+    pinchPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  };
+  const onContainerPointerMove = (e: React.PointerEvent) => {
+    if (!pinchPointersRef.current.has(e.pointerId)) return;
+    const prev = new Map(pinchPointersRef.current);
+    pinchPointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinchPointersRef.current.size !== 2) return;
+    const [a, b] = [...pinchPointersRef.current.values()];
+    const [pa, pb] = [...prev.values()];
+    const prevDist = Math.hypot(pa.x - pb.x, pa.y - pb.y);
+    const newDist = Math.hypot(a.x - b.x, a.y - b.y);
+    if (prevDist < 1 || newDist < 1) return;
+    const factor = prevDist / newDist;
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const midX = (a.x + b.x) / 2 - rect.left;
+    const midY = (a.y + b.y) / 2 - rect.top;
+    setView(withZoomAtScreenPoint(view, viewportPx, { x: midX, y: midY }, factor));
+  };
+  const onContainerPointerUp = (e: React.PointerEvent) => {
+    pinchPointersRef.current.delete(e.pointerId);
+  };
+
   const snapScreen = snapResult ? worldToScreen(snapResult.point, view, viewportPx) : null;
 
   return (
-    <div ref={containerRef} className="relative h-full rounded-lg bg-white shadow-panel">
+    <div
+      ref={containerRef}
+      className="relative h-full rounded-lg bg-white shadow-panel"
+      onPointerDown={onContainerPointerDown}
+      onPointerMove={onContainerPointerMove}
+      onPointerUp={onContainerPointerUp}
+      onPointerCancel={onContainerPointerUp}
+    >
       <Stage
         width={viewportPx.width}
         height={viewportPx.height}
@@ -153,7 +212,7 @@ const KonvaViewport = () => {
           const rect = containerRef.current?.getBoundingClientRect();
           if (!rect) return;
           const screenPoint = { x: e.evt.clientX - rect.left, y: e.evt.clientY - rect.top };
-          const factor = e.evt.deltaY > 0 ? 1.1 : 0.9;
+          const factor = e.evt.deltaY > 0 ? 1.08 : 0.92;
           setView(withZoomAtScreenPoint(view, viewportPx, screenPoint, factor));
         }}
         onMouseMove={(e) => {
@@ -188,7 +247,7 @@ const KonvaViewport = () => {
           if (ctx) handlers.onPointerUp?.(ctx, actions);
         }}
       >
-        <KonvaGridLayer view={view} viewportPx={viewportPx} baseStepM={0.05} />
+        {gridVisible && <KonvaGridLayer view={view} viewportPx={viewportPx} baseStepM={0.05} />}
         <KonvaSceneLayer
           project={project}
           selectedId={selectedId}
@@ -197,6 +256,7 @@ const KonvaViewport = () => {
           hoveredVertexId={hoveredVertexId}
           vertexHandleRadius={4 / pixelsPerMeter}
           wallDraft={wallDraft ?? undefined}
+          dividerDraft={dividerDraft}
           rectDraft={rectDraft}
           measureDraft={measure}
           onSelect={setSelected}
@@ -204,9 +264,22 @@ const KonvaViewport = () => {
       </Stage>
       <KonvaRulersOverlay view={view} viewportPx={viewportPx} />
       {snapScreen && <SnapOverlay snap={snapResult} leftPx={snapScreen.x} topPx={snapScreen.y} />}
-      {previewLabel && <div className="pointer-events-none absolute rounded bg-white/90 px-2 py-1 text-xs text-slate-700" style={{ left: `${worldToScreen(previewLabel.point, view, viewportPx).x + 8}px`, top: `${worldToScreen(previewLabel.point, view, viewportPx).y + 8}px` }}>{previewLabel.text}</div>}
-      <div className="absolute bottom-2 left-10 rounded bg-white/90 px-2 py-1 text-xs text-slate-700">{cursor ? `Cursor ${cursor.x.toFixed(2)}m, ${cursor.y.toFixed(2)}m · Zoom ${view.zoom.toFixed(2)}x` : 'Move cursor'}</div>
+      {previewLabel && (
+        <div
+          className="pointer-events-none absolute rounded bg-white/90 px-2 py-1 text-xs text-slate-700"
+          style={{ left: `${worldToScreen(previewLabel.point, view, viewportPx).x + 8}px`, top: `${worldToScreen(previewLabel.point, view, viewportPx).y + 8}px` }}
+        >
+          {previewLabel.text}
+        </div>
+      )}
+      {/* Status bar (bottom-left) */}
+      <div className="absolute bottom-2 left-10 rounded bg-white/90 px-2 py-1 text-xs text-slate-700">
+        {cursor ? `${cursor.x.toFixed(2)}m, ${cursor.y.toFixed(2)}m` : 'Move cursor'}
+      </div>
+      {/* Edge count (top-right) */}
       <div className="absolute right-2 top-8 rounded bg-white/90 px-2 py-1 text-xs text-slate-600">{projectSegments} edges</div>
+      {/* Zoom controls (bottom-right) — Item 7 */}
+      <ZoomControls view={view} setView={setView} viewportPx={viewportPx} />
     </div>
   );
 };

@@ -14,6 +14,8 @@ const App = () => {
   const redo = useAppStore((s) => s.redo);
   const deleteSelection = useAppStore((s) => s.deleteSelection);
   const setTool = useAppStore((s) => s.setTool);
+  const toggleGrid = useAppStore((s) => s.toggleGrid);
+  const fitToScreen = useAppStore((s) => s.fitToScreen);
 
   const addToast = (message: string) => {
     setToasts((prev) => [...prev, message].slice(-4));
@@ -46,15 +48,18 @@ const App = () => {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key.toLowerCase() === 'z') {
-        e.preventDefault();
-        undo();
-      }
-      if (e.ctrlKey && e.key.toLowerCase() === 'y') {
-        e.preventDefault();
-        redo();
-      }
-      if (e.key === 'Delete') deleteSelection();
+      // Ignore shortcuts when typing in an input/textarea
+      const tag = (e.target as HTMLElement)?.tagName;
+      const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+
+      if (e.ctrlKey && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
+      if (e.ctrlKey && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
+      if (e.ctrlKey && e.key.toLowerCase() === 'g') { e.preventDefault(); toggleGrid(); return; }
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'f') { e.preventDefault(); fitToScreen(); return; }
+
+      if (isInput) return;
+
+      if (e.key === 'Delete' || e.key === 'Backspace') deleteSelection();
       if (e.key.toLowerCase() === 'v') setTool('select');
       if (e.key.toLowerCase() === 'g') setTool('move');
       if (e.key.toLowerCase() === 'w') setTool('wall');
@@ -63,10 +68,12 @@ const App = () => {
       if (e.key.toLowerCase() === 'd') setTool('door');
       if (e.key.toLowerCase() === 'n') setTool('window');
       if (e.key.toLowerCase() === 'm') setTool('measure');
+      if (e.key.toLowerCase() === 'z') setTool('divider');
+      if (e.key.toLowerCase() === 'f') setTool('symbol');
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [deleteSelection, redo, setTool, undo]);
+  }, [deleteSelection, redo, setTool, toggleGrid, fitToScreen, undo]);
 
   return (
     <main className="h-full p-3 text-slate-800">
